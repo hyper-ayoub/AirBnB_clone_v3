@@ -134,25 +134,93 @@ def update_place(place_id):
     """
     # Get the Place object with the given ID from the storage
     place = storage.get(Place, place_id)
-    if not place:
+    if place:
+        # Check if the request data is in JSON format
+        if not request.get_json():
+            # Return 400 error if the request data is not in JSON format
+            abort(400, "Not a JSON")
+
+        # Get the JSON data from the request
+        data = request.get_json()
+        ignore_keys = ["id", "user_id", "city_id", "created_at", "updated_at"]
+        # Update the attributes of the Place object with the JSON data
+        for key, value in data.items():
+            if key not in ignore_keys:
+                setattr(place, key, value)
+
+        # Save the updated Place object to the storage
+        place.save()
+        # Return the updated Place object in JSON format with 200 status code
+        return jsonify(place.to_dict()), 200
+    else:
         # Return 404 error if the Place object is not found
         abort(404)
 
-    # Check if the request data is in JSON format
-    if not request.get_json():
-        # Return 400 error if the request data is not in JSON format
-        abort(400, "Not a JSON")
 
-    # Get the JSON data from the request
+# New endpoint: POST /api/v1/places_search
+@app_views.route("/places_search", methods=["POST"], strict_slashes=False)
+def places_search():
+    """
+    Retrieves Place objects based on the provided JSON search criteria
+    """
+
+    # Check if the request contains valid JSON
+    if request.get_json() is None:
+        abort(400, description="Not a JSON")
+
+    # Extract data from the JSON request body
     data = request.get_json()
 
-    # Update the Place object with the new data
-    for key, value in data.items():
-        if key not in ["id", "user_id", "city_id", "created_at", "updated_at"]:
-            setattr(place, key, value)
+    if data and len(data):
+        states = data.get("states", None)
+        cities = data.get("cities", None)
+        amenities = data.get("amenities", None)
 
-    # Save the updated Place object to the storage
-    place.save()
+    # If no criteria provided, retrieve all places
+    if not any([states, cities, amenities]):
+        places = storage.all(Place).values()
+        places = [place.to_dict() for place in places]
+        return jsonify(places)
+    list_places = []
 
-    # Return the updated Place object in JSON format
-    return jsonify(place.to_dict()), 200
+    # Filter and retrieve places based on states criteria
+    if states:
+        state_obj = [storage.get(State, s_id) for s_id in states]
+        for state in state_obj:
+            if state:
+                for city in state.cities:
+                    for place in city.places:
+                        if place not in list_places:
+                            list_places.append(place)
+
+    # Filter and retrieve places based on cities criteria
+    if cities:
+        city_obj = [storage.get(City, c_id) for c_id in cities]
+        for city in city_obj:
+            if city:
+                for place in city.places:
+                    if place not in list_places:
+                        list_places.append(place)
+
+    # Filter places based on amenities criteria
+    if amenities:
+        if not list_places:
+            list_places = storage.all(Place).values()
+        amenities_obj = [storage.get(Amenity, a_id) for a_id in amenities]
+
+        list_places = [
+            place
+            for place in list_places
+            if all([am in place.amenities for am in amenities_obj])
+        ]
+
+    # Prepare the final list of places for response
+    places = []
+    for p in list_places:
+        d = p.to_dict()
+        d.pop("amenities", None)
+        places.append(d)
+
+    # Return the list of places in JSON format
+    return jsonify(places)
+    #end of the code 
