@@ -223,4 +223,3 @@ def places_search():
 
     # Return the list of places in JSON format
     return jsonify(places)
-    #end of the code 
