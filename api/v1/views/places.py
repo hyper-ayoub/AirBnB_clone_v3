@@ -38,11 +38,7 @@ def get_places_by_city(city_id):
 
 
 # Route for retrieving a specific Place object by ID
-@app_views.route(
-    "/places/<place_id>",
-    methods=["GET"],
-    strict_slashes=False,
-)
+@app_views.route("/places/<place_id>", methods=["GET"], strict_slashes=False)
 def get_place(place_id):
     """
     Retrieves a Place object
@@ -123,11 +119,7 @@ def create_place(city_id):
 
 
 # Route for updating an existing Place object by ID
-@app_views.route(
-    "/places/<place_id>",
-    methods=["PUT"],
-    strict_slashes=False,
-)
+@app_views.route("/places/<place_id>", methods=["PUT"], strict_slashes=False)
 def update_place(place_id):
     """
     Updates a Place object
@@ -157,6 +149,27 @@ def update_place(place_id):
         abort(404)
 
 
+# Error Handlers:
+@app_views.errorhandler(404)
+def not_found(error):
+    """
+    Returns 404: Not Found
+    """
+    # Return a JSON response for 404 error
+    response = {"error": "Not found"}
+    return jsonify(response), 404
+
+
+@app_views.errorhandler(400)
+def bad_request(error):
+    """
+    Return Bad Request message for illegal requests to the API
+    """
+    # Return a JSON response for 400 error
+    response = {"error": "Bad Request"}
+    return jsonify(response), 400
+
+
 # New endpoint: POST /api/v1/places_search
 @app_views.route("/places_search", methods=["POST"], strict_slashes=False)
 def places_search():
@@ -177,20 +190,26 @@ def places_search():
         amenities = data.get("amenities", None)
 
     # If no criteria provided, retrieve all places
-    if not any([states, cities, amenities]):
+    if not data or not len(data) or (
+            not states and
+            not cities and
+            not amenities):
         places = storage.all(Place).values()
-        places = [place.to_dict() for place in places]
-        return jsonify(places)
+        list_places = []
+        for place in places:
+            list_places.append(place.to_dict())
+        return jsonify(list_places)
+
     list_places = []
 
     # Filter and retrieve places based on states criteria
     if states:
-        state_obj = [storage.get(State, s_id) for s_id in states]
-        for state in state_obj:
+        states_obj = [storage.get(State, s_id) for s_id in states]
+        for state in states_obj:
             if state:
                 for city in state.cities:
-                    for place in city.places:
-                        if place not in list_places:
+                    if city:
+                        for place in city.places:
                             list_places.append(place)
 
     # Filter and retrieve places based on cities criteria
